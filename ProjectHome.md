@@ -1,0 +1,1 @@
+Sets of ip6tables rules used for testing with various applications. These rules are not designed for production use.
