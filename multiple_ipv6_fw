@@ -1,0 +1,28 @@
+#!/bin/bash
+
+LOCALNET=" "
+ADMINNET=" "
+
+ip6tables -P INPUT DROP
+ip6tables -P OUTPUT DROP
+ip6tables -P FORWARD DROP
+
+ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Allow internal webserver access
+ip6tables -A INPUT -s $LOCALNET -p tcp --dport 80 -j ACCEPT
+ip6tables -A OUTPUT -d $LOCALNET -p tcp -j ACCEPT
+
+# Allow admin access to SSH
+ip6tables -A INPUT -s $ADMINNET -p tcp --dport 22 -j ACCEPT
+ip6tables -A OUTPUT -d $ADMINNET -p tcp -j ACCEPT
+
+# Allow Internet access, but not inbound new,invlaid
+ip6tables -A OUTPUT -d ! $ADMINNET -j ACCEPT
+ip6tables -A OUTPUT -d ! $LOCALNET -j ACCEPT
+
+
+
+
+

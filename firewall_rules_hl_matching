@@ -1,0 +1,43 @@
+#!/bin/sh
+
+ip6tables -F INPUT
+ip6tables -F FORWARD
+ip6tables -F OUTPUT
+
+# Setup policies
+ip6tables -P INPUT DROP
+ip6tables -P FORWARD DROP
+ip6tables -P OUTPUT ACCEPT
+
+# Allow everything from localhost
+ip6tables -A INPUT -s ::1 -d ::1 -j ACCEPT
+
+# Limit some types of ICMP
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 133 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 134 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type router-advertisement -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 137 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 146 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 147 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 200 -j REJECT
+
+# Allow some ICMPv6 types if their Hop Limit is 255
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 135 -m hl --hl-lt 255 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 136 -m hl --hl-lt 255 -j REJECT
+
+# Rate limit the rest
+ip6tables -A INPUT -m limit --limit 900/min -p icmpv6 -j ACCEPT
+ip6tables -A OUTPUT -m limit --limit 900/min -p icmpv6 -j ACCEPT
+
+# Allow UDP to work
+ip6tables -A INPUT -p udp --dport 1024:65535 -j ACCEPT
+
+# Stateful matching
+ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Drop and log other packets. 
+ip6tables -A INPUT -m limit -m state --state NEW,INVALID --limit 5/second -j LOG 
+ip6tables -A INPUT -m limit -m state --state NEW,INVALID -j DROP
+
+
+

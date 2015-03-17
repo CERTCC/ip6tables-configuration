@@ -1,0 +1,129 @@
+#!/bin/sh
+
+# Don't use until you test these rules. They are designed to be used as a demonstration.
+# See http://www.iana.org/assignments/icmpv6-parameters for ICMPv6 types.
+
+# Flush chains.
+
+ip6tables -F INPUT
+ip6tables -F FORWARD
+ip6tables -F OUTPUT
+ip6tables -F
+
+# Set up default policies
+
+ip6tables -P INPUT DROP
+ip6tables -P FORWARD DROP
+ip6tables -P OUTPUT DROP
+
+
+# Allow localhost
+
+ip6tables -A INPUT -s ::1 -d ::1 -j ACCEPT
+
+
+# Allow some ICMPv6 types in the INPUT chain.
+
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
+
+
+# Allow some other types in the INPUT chain, but rate limit. The rate will need adjusted based on your
+# connection speed.
+
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 128 -m limit --limit 900/min -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 129 -m limit --limit 900/min -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 135 -m limit --limit 900/min -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 136 -m limit --limit 900/min -j ACCEPT
+
+
+# Allow some others ICMPv6 types but only if the hop limit field is 255.
+# We're still in the INPUT chain. Types can be listed by name (ip6tables -p ipv6-icmp -h).
+
+ip6tables -A INPUT -p icmpv6 --icmpv6-type router-advertisement -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 141 -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 142 -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 151 -m hl --hl-eq 255 -j ACCEPT
+
+
+# When there isn't a match, the policy (DROP) will be applied. Just to be sure, we can drop all other ICMPv6 types.
+
+ip6tables -A INPUT -p icmpv6 -j DROP
+
+
+# Output chain will be easier. Allow ICMPv6 types that should be sent over the Internet
+
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
+
+
+# Limit most NDP messages to the local network.
+
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 133 -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 135 -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 136 -m hl --hl-eq 255 -j ACCEPT
+
+
+# If we send router advertisements or redirects, log and block.
+
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 134 -j LOG --log-prefix "ICMPv6 type 134"
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 134 -j REJECT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 137 -j LOG --log-prefix "ICMPv6 type 137"
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 137 -j REJECT
+
+
+# Only allow selected ICMPv6 types in the FORWARD chain
+
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 1 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 2 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 3 -j ACCEPT
+ip6tables -A OUTPUT -p icmpv6 --icmpv6-type 4 -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 128 -m limit --limit 900/min -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 129 -m limit --limit 900/min -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 135 -m limit --limit 900/min -j ACCEPT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 136 -m limit --limit 900/min -j ACCEPT
+ip6tables -A FORWARD -p icmpv6 -j REJECT
+
+
+# Accept all other ICMPv6 types in the OUTPUT chain.
+
+ip6tables -A OUTPUT -p icmpv6 -j ACCEPT
+
+
+# Enough ICMPv6! Some sample TCP rules. Allow SSH, but only the local network.
+# These rules could be expanded.
+
+ip6tables -A INPUT -p tcp --dport 22 -m hl --hl-eq 255 -j ACCEPT
+
+
+# Reject SMB.
+
+ip6tables -A INPUT -m multiport -p tcp --dport 139,445 -j REJECT
+
+
+# Stateful TCP matching. 
+
+ip6tables -A OUTPUT -p tcp -j ACCEPT
+ip6tables -A INPUT -p tcp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+
+# Same with UDP.
+
+ip6tables -A OUTPUT -p udp -j ACCEPT
+ip6tables -A INPUT -p udp -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+
+# Drop NEW and INVALID. Probably not needed due to the default policy.
+
+ip6tables -A INPUT -m state --state NEW,INVALID -j DROP
+
+
+# Drop everything in the FORWARD chain.
+
+ip6tables -A FORWARD -p tcp -j DROP
+ip6tables -A FORWARD -p udp -j DROP
+

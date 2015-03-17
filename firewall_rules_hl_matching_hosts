@@ -1,0 +1,59 @@
+#!/bin/sh
+
+# Flush chains.
+
+ip6tables -F INPUT
+ip6tables -F FORWARD
+ip6tables -F OUTPUT
+ip6tables -F badports
+
+# Set up default policies
+
+ip6tables -P INPUT DROP
+ip6tables -P FORWARD DROP
+ip6tables -P OUTPUT ACCEPT
+
+
+IP1=""
+IP2=""
+
+# Allow localhost
+
+ip6tables -A INPUT -s ::1 -d ::1 -j ACCEPT
+
+
+# Allow predictable addresses, block everything else
+
+ip6tables -A INPUT -s $IP1 -p tcp --dport 22 -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A INPUT -s $IP2 -p tcp --dport 22 -m hl --hl-eq 255 -j ACCEPT
+ip6tables -A INPUT -s $IP1 -p tcp --dport 445 -m hl --hl-lt 255 -j REJECT
+ip6tables -A INPUT -s $IP2 -p tcp --dport 445 -m hl --hl-lt 255 -j REJECT
+
+
+# Limit, DROP ICMPv6 types
+
+ip6tables -A INPUT -p icmpv6 --icmpv6-type router-advertisement -m hl --hl-lt 255 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 133 -m hl --hl-lt 255 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 135 -m hl --hl-lt 255 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 136 -m hl --hl-lt 255 -j REJECT
+
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 200 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 137 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 146 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 147 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 200 -j REJECT
+ip6tables -A INPUT -p icmpv6 --icmpv6-type 201 -j REJECT
+ip6tables -A INPUT -m limit --limit 900/min -p icmpv6 -j ACCEPT
+ip6tables -A OUTPUT -m limit --limit 900/min -p icmpv6 -j ACCEPT
+ip6tables -A FORWARD -m limit --limit 900/min -p icmpv6 -j ACCEPT
+
+
+# Use stateful matching for TCP
+
+ip6tables -A INPUT -p tcp -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+
+# Allow UDP 
+
+ip6tables -A INPUT -p udp -j ACCEPT
+
